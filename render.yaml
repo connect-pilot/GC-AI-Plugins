@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: gc-ai-plugins
+    runtime: node
+    plan: starter # always-on; free tier sleeps and breaks connectors
+    numInstances: 1 # uploads + Connect Gmail live in this process's memory — do not scale out
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build # NODE_ENV=production would skip TypeScript
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk: # saved presentation resumes (one JSON file per build)
+      name: resume-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: PUBLIC_URL # https://gc-ai-plugins.onrender.com (or your custom domain), no trailing slash
+        sync: false
+
+      # --- Sign-in with Google (also grants Gmail drafts) ---
+      # Google Cloud OAuth client (Web). Redirect URIs: <PUBLIC_URL>/oauth/callback and <PUBLIC_URL>/gmail/callback
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Encrypts sign-in tokens and download links (nothing stored). Changing it signs everyone out.
+      - key: OAUTH_SECRET
+        generateValue: true
+      - key: ALLOWED_EMAIL_DOMAINS # GoldCoast's Google Workspace domain, e.g. goldcoastsearch.com
+        sync: false
+      - key: ALLOWED_EMAILS # optional extra addresses, e.g. joe@connectpilot.ai
+        sync: false
+      # Set GOOGLE_SIGN_IN=false to use the access key below while Google is being set up.
+      - key: GOOGLE_SIGN_IN
+        sync: false
+
+      # --- Fallback: shared access key (ignored once Google sign-in is on) ---
+      - key: MCP_ACCESS_KEY # openssl rand -hex 32
+        sync: false
+      - key: ACCESS_KEY_USER
+        value: joe@connectpilot.ai
+      - key: ENABLED_PLUGINS
+        sync: false
+
+      # --- Resume Builder branding ---
+      - key: COMPANY_NAME
+        value: GoldCoast Search Group
+      - key: COMPANY_PHONE
+        sync: false
+      - key: COMPANY_WEBSITE
+        sync: false
+      - key: CONSULTANT_EMAILS # comma-separated letterhead emails
+        sync: false
+      - key: RESUME_FILE_PREFIX
+        value: GoldCoast
+
+      # --- Resume Builder storage ---
+      - key: RESUME_DATA_DIR
+        value: /var/data/resumes
+      - key: RESUME_RETENTION_DAYS
+        value: "180"
