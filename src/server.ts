@@ -8,6 +8,7 @@ import { GoogleOAuthProvider } from "./auth/google.js";
 import { authMiddleware } from "./auth/index.js";
 import type { Env } from "./core/env.js";
 import { logger } from "./core/logger.js";
+import { publicPages } from "./core/public-pages.js";
 import type { AuthedUser, GcPlugin } from "./core/plugin.js";
 
 const SERVER_NAME = "gc-ai-plugins";
@@ -47,6 +48,8 @@ export function createApp(env: Env, plugins: GcPlugin[], opts: AppOptions = {}):
   });
   // 16mb: the Resume Builder dashboard uploads resumes (up to 10 MB, base64-encoded) inside a tool call.
   app.use(express.json({ limit: "16mb" }));
+
+  publicPages(app); // home, privacy policy and terms (linked from Google's consent screen)
 
   app.get("/healthz", (_req, res) => {
     // commit: which build is live (Render sets RENDER_GIT_COMMIT); null when running locally.
