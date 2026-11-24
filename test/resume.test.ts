@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBranding, loadLogo } from "../src/plugins/resume-builder/branding.js";
+import { letterheadSuggestions, loadBranding, loadLogo } from "../src/plugins/resume-builder/branding.js";
 import { renderResumeDocx } from "../src/plugins/resume-builder/docx.js";
 import { detectKind, extractResume, ExtractError } from "../src/plugins/resume-builder/extract.js";
 import { pdfSafe, renderResumePdf } from "../src/plugins/resume-builder/pdf.js";
@@ -8,7 +8,8 @@ import { BuildStore } from "../src/plugins/resume-builder/store.js";
 import { SAMPLE_RESUME } from "./fixtures/sample-resume.js";
 
 const data = normalizeResume(resumeDataInput.parse(SAMPLE_RESUME));
-const branding = loadBranding({ COMPANY_PHONE: "(555) 010-0100" });
+const branding = loadBranding({});
+const letterhead = { email: "recruiter@example.com", phone: "(555) 010-0100", website: "www.example.com" };
 
 describe("schema", () => {
   it("formats file names like the original (Last, First)", () => {
@@ -32,22 +33,38 @@ describe("schema", () => {
 
 describe("renderers", () => {
   it("renders a multi-page PDF whose text round-trips", async () => {
-    const pdf = await renderResumePdf(data, "recruiter@example.com", branding, loadLogo({}));
+    const pdf = await renderResumePdf(data, letterhead, branding, loadLogo({}));
     expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
     const back = await extractResume("x.pdf", pdf);
     expect(back.pages).toBe(2);
     expect(back.text).toContain("PROFESSIONAL EXPERIENCE");
     expect(back.text).toContain("August 2022 to Present");
     expect(back.text).toContain("Proprietary and Confidential © GoldCoast Search Group");
+    expect(back.text).toContain("(555) 010-0100");
+    expect(back.text).toContain("www.example.com");
   });
   it("renders a DOCX whose text round-trips", async () => {
-    const docx = await renderResumeDocx(data, "recruiter@example.com", branding, loadLogo({}));
+    const docx = await renderResumeDocx(data, letterhead, branding, loadLogo({}));
     const back = await extractResume("x.docx", docx);
     expect(back.text).toContain("SKILLS");
     expect(back.text).toContain("Sunfield Energy Constructors");
   });
   it("keeps WinAnsi characters and approximates the rest", () => {
     expect(pdfSafe("Résumé – “Jay” → 5 ✓")).toBe("Résumé – “Jay” -> 5 ");
+  });
+});
+
+describe("letterhead suggestions", () => {
+  it("offers the signed-in email first, then recent ones, and prefills the last letterhead", () => {
+    const recent = [
+      { email: "b@gc.com", phone: "(555) 2", website: "gc.com" },
+      { email: "a@gc.com", phone: "(555) 1", website: "gc.com" },
+    ];
+    const s = letterheadSuggestions(recent, "a@gc.com");
+    expect(s.emails).toEqual(["a@gc.com", "b@gc.com"]);
+    expect(s.websites).toEqual(["gc.com"]);
+    expect(s.last?.phone).toBe("(555) 2");
+    expect(letterheadSuggestions([], "local-dev@localhost").emails).toEqual([]);
   });
 });
 

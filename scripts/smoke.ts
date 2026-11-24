@@ -18,8 +18,8 @@ const callJson = async (name: string, args: Record<string, unknown> = {}) => {
   return { r, data: (r.structuredContent as Record<string, unknown>) ?? (() => { try { return JSON.parse(text); } catch { return { text }; } })() };
 };
 
-const branding = (await callJson("resume_get_branding")).data as { company_name: string; consultant_emails: string[]; playbook: string };
-console.log("branding:", branding.company_name, branding.consultant_emails, `playbook ${branding.playbook.length} chars`);
+const branding = (await callJson("resume_get_branding")).data as { company_name: string; letterhead_suggestions: unknown; playbook: string };
+console.log("branding:", branding.company_name, JSON.stringify(branding.letterhead_suggestions), `playbook ${branding.playbook.length} chars`);
 
 // Dashboard upload of a "raw resume" (any PDF works; use the sample render if present).
 let uploadId: string | undefined;
@@ -36,7 +36,9 @@ try {
 
 const gen = await callJson("resume_generate", {
   resume_data: SAMPLE_RESUME,
-  consultant_email: branding.consultant_emails[0] ?? "recruiter@example.com",
+  consultant_email: "recruiter@example.com",
+  letterhead_phone: "(555) 010-0100",
+  letterhead_website: "www.example.com",
   ...(uploadId ? { upload_id: uploadId } : {}),
   intake: { compensation_recent: "$165k/yr + PD", compensation_requested: "$175–185k/yr + PD", internal_references: ["Pat Reference"], candidate_email: "jordan@example.com", candidate_phone: "(555) 010-0199", candidate_location: "Columbus, OH" },
   client_email: {

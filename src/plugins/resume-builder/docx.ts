@@ -27,7 +27,7 @@ import {
   type IParagraphOptions,
   type ParagraphChild,
 } from "docx";
-import { imageSize, type Branding } from "./branding.js";
+import { imageSize, type Branding, type Letterhead } from "./branding.js";
 import { certText, displayName, type ResumeData, type SectionId } from "./schema.js";
 
 const FONT = "Arial";
@@ -109,7 +109,7 @@ function twoColBullets(items: string[]) {
 }
 
 // ── Header / footer ──────────────────────────────────────────────────────
-function buildHeader(branding: Branding, consultantEmail: string, logo: Buffer | null) {
+function buildHeader(letterhead: Letterhead, logo: Buffer | null) {
   const logoChildren: ParagraphChild[] = [];
   if (logo) {
     const dim = imageSize(logo);
@@ -120,7 +120,7 @@ function buildHeader(branding: Branding, consultantEmail: string, logo: Buffer |
     }
   }
   const contact: ParagraphChild[] = [];
-  [branding.company_phone, consultantEmail, branding.company_website].forEach((line, i) => {
+  [letterhead.phone, letterhead.email, letterhead.website].forEach((line, i) => {
     contact.push(new TextRun({ text: xmlSafe(line ?? ""), font: FONT, size: hp(11), break: i > 0 ? 1 : undefined }));
   });
   const cell = (children: Paragraph[]) => new TableCell({ width: { size: HALF_W, type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children });
@@ -244,7 +244,7 @@ const builders: Record<SectionId, (d: ResumeData) => Block[]> = {
 };
 
 /** Renders the presentation resume DOCX. */
-export async function renderResumeDocx(data: ResumeData, consultantEmail: string, branding: Branding, logo: Buffer | null): Promise<Buffer> {
+export async function renderResumeDocx(data: ResumeData, letterhead: Letterhead, branding: Branding, logo: Buffer | null): Promise<Buffer> {
   const children: Block[] = [textPara(displayName(data), { size: 18, bold: true, align: AlignmentType.CENTER, after: 2 })];
   if (data.position_applied) children.push(textPara(data.position_applied, { size: 11, align: AlignmentType.CENTER, color: "333333", after: 14 }));
   for (const s of data.section_order) children.push(...(builders[s]?.(data) ?? []));
@@ -276,7 +276,7 @@ export async function renderResumeDocx(data: ResumeData, consultantEmail: string
             },
           },
         },
-        headers: { default: buildHeader(branding, consultantEmail, logo) },
+        headers: { default: buildHeader(letterhead, logo) },
         footers: { default: buildFooter(branding) },
         children,
       },

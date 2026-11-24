@@ -17,12 +17,12 @@ import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import type { GcPlugin, PluginContext } from "../../core/plugin.js";
-import { consultantEmailsFor, loadBranding } from "./branding.js";
+import { letterheadSuggestions, loadBranding } from "./branding.js";
 import { DASHBOARD_URI, registerResumeDashboard, buildSummary } from "./dashboard.js";
 import { downloadUrl, fileRoutes } from "./files.js";
 import { INSTRUCTIONS, PLAYBOOK } from "./prompts.js";
 import { clientEmailInput, contentReviewInput, intakeInput, normalizeResume, resumeDataInput } from "./schema.js";
-import { BUILD_ID_RE, getStore, type Build } from "./store.js";
+import { BUILD_ID_RE, getStore, letterheadOf, type Build } from "./store.js";
 import { getUpload, listUploads, UPLOAD_ID_RE } from "./uploads.js";
 
 const text = (data: unknown, isError = false): CallToolResult => ({
@@ -45,7 +45,7 @@ export function buildResult(ctx: PluginContext, b: Build) {
     version: b.version,
     candidate: b.resume.candidate_name,
     position_applied: b.resume.position_applied,
-    consultant_email: b.consultant_email,
+    letterhead: letterheadOf(b),
     pdf_url: downloadUrl(ctx.env, b, "pdf"),
     docx_url: downloadUrl(ctx.env, b, "docx"),
   };
@@ -91,7 +91,7 @@ export const resumeBuilderPlugin: GcPlugin = {
       {
         title: "Get branding and the Resume Builder playbook",
         description:
-          "Call first, before building or revising any presentation resume. Returns company branding (company_name — copy it exactly into the client email subject; phone; website), the consultant emails for the letterhead (the signed-in recruiter's first when listed), and the Resume Builder playbook: the workflow, formatting rules, JSON schema and output format to follow.",
+          "Call first, before building or revising any presentation resume. Returns company_name (copy it exactly into the client email subject), letterhead suggestions (consultant emails, phones and websites this recruiter used before, and the signed-in email) to offer when asking for the letterhead, and the Resume Builder playbook: the workflow, formatting rules, JSON schema and output format to follow.",
         inputSchema: {},
         annotations: { readOnlyHint: true, openWorldHint: false },
       },
@@ -99,9 +99,7 @@ export const resumeBuilderPlugin: GcPlugin = {
         const b = loadBranding(ctx.env.raw);
         const result = {
           company_name: b.company_name,
-          company_phone: b.company_phone,
-          company_website: b.company_website,
-          consultant_emails: consultantEmailsFor(b, ctx.user.email),
+          letterhead_suggestions: letterheadSuggestions(store.recentLetterheads(owner), ctx.user.email),
           signed_in_email: ctx.user.email,
           playbook: PLAYBOOK,
         };
@@ -162,6 +160,8 @@ export const resumeBuilderPlugin: GcPlugin = {
         inputSchema: {
           resume_data: resumeDataInput.describe("Structured resume JSON matching the playbook's schema"),
           consultant_email: z.string().trim().min(3).max(200).describe("The consultant email to display in the letterhead"),
+          letterhead_phone: z.string().trim().max(60).optional().describe("Phone line on the letterhead (as the user gave it)"),
+          letterhead_website: z.string().trim().max(200).optional().describe("Website line on the letterhead (as the user gave it)"),
           build_id: z.string().regex(BUILD_ID_RE).optional().describe("Update this existing build instead of creating a new one"),
           upload_id: z.string().regex(UPLOAD_ID_RE).optional().describe("The dashboard upload this resume came from"),
           source_file_name: z.string().max(200).optional().describe("The original resume's file name"),
@@ -174,6 +174,8 @@ export const resumeBuilderPlugin: GcPlugin = {
       },
       async (args) => {
         const resume = normalizeResume(args.resume_data);
+        // Letterhead lines the user didn't restate: keep the build's own (revisions), else the last used.
+        const lastUsed = store.recentLetterheads(owner)[0];
         const upload = args.upload_id ? getUpload(args.upload_id, owner) : null;
         const source = { file_name: args.source_file_name ?? upload?.fileName, upload_id: args.upload_id };
         let build: Build | null;
@@ -183,6 +185,8 @@ export const resumeBuilderPlugin: GcPlugin = {
           build = store.update(args.build_id, owner, {
             resume,
             consultant_email: args.consultant_email,
+            letterhead_phone: args.letterhead_phone ?? prev.letterhead_phone ?? "",
+            letterhead_website: args.letterhead_website ?? prev.letterhead_website ?? "",
             intake: { ...prev.intake, ...args.intake },
             client_email: args.client_email ?? prev.client_email,
             content_review: args.content_review ?? prev.content_review,
@@ -192,6 +196,8 @@ export const resumeBuilderPlugin: GcPlugin = {
           build = store.create(owner, {
             resume,
             consultant_email: args.consultant_email,
+            letterhead_phone: args.letterhead_phone ?? lastUsed?.phone ?? "",
+            letterhead_website: args.letterhead_website ?? lastUsed?.website ?? "",
             intake: args.intake ?? {},
             client_email: args.client_email ?? null,
             content_review: args.content_review ?? null,

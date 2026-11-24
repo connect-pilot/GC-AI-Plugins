@@ -13,7 +13,7 @@ import { loadBranding, loadLogo } from "./branding.js";
 import { renderResumeDocx } from "./docx.js";
 import { renderResumePdf } from "./pdf.js";
 import { formatCandidateFilename } from "./schema.js";
-import type { Build, BuildStore } from "./store.js";
+import { letterheadOf, type Build, type BuildStore } from "./store.js";
 
 export type Format = "pdf" | "docx";
 export const MIME: Record<Format, string> = {
@@ -35,7 +35,8 @@ export async function renderBuild(build: Build, format: Format, env: NodeJS.Proc
   if (hit) return hit;
   const branding = loadBranding(env);
   const logo = loadLogo(env);
-  const bytes = format === "pdf" ? await renderResumePdf(build.resume, build.consultant_email, branding, logo) : await renderResumeDocx(build.resume, build.consultant_email, branding, logo);
+  const lh = letterheadOf(build);
+  const bytes = format === "pdf" ? await renderResumePdf(build.resume, lh, branding, logo) : await renderResumeDocx(build.resume, lh, branding, logo);
   cache.set(key, bytes);
   while (cache.size > 40) cache.delete(cache.keys().next().value!);
   return bytes;

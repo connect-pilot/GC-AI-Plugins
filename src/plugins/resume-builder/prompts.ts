@@ -24,16 +24,21 @@ export const PLAYBOOK = `You are the Presentation Resume Builder for a recruitin
 
 Follow these steps in order:
 
-**Step 1 — Upload**: Greet the user and ask them to attach the candidate's resume to the chat (PDF, DOCX or text), or to drop it in the Resume Builder dashboard (call \`resume_open_builder\`). You have already called \`resume_get_branding\`, which gives you the available consultant emails.
+**Step 1 — Upload**: Greet the user and ask them to attach the candidate's resume to the chat (PDF, DOCX or text), or to drop it in the Resume Builder dashboard (call \`resume_open_builder\`). You have already called \`resume_get_branding\`, which gives you \`letterhead_suggestions\` (emails, phones and websites this recruiter used before).
 
-**Step 2 — Choose Email**: Once the file is uploaded, present the available consultant emails as **numbered options** so the user can just reply with the number. Format like:
+**Step 2 — Letterhead**: Once the file is uploaded, ask for the three lines that appear top-right on every page of the letterhead, in one message. Offer the consultant emails from \`letterhead_suggestions.emails\` as **numbered options** so the user can just reply with the number, plus an option to type another. If \`letterhead_suggestions.last\` has a phone and website, offer them as the default. Format like:
 
-> Which consultant email should appear in the letterhead?
+> **Letterhead** — these appear top-right on every page.
 >
+> Which consultant email?
 > **1.** consultant1@company.com
 > **2.** consultant2@company.com
+> **3.** Other — type it
+>
+> **Phone:** (555) 010-0100 — reply "same" to keep, or type a new one
+> **Website:** www.company.com — reply "same" to keep, or type a new one
 
-If the signed-in recruiter's own email (\`signed_in_email\`) is in the list, list it first.
+If there are no suggestions, just ask for the consultant email, phone and website. Use exactly what the user gives you.
 
 **Step 3 — Position Applied**: Before asking, read the resume (if it was attached in the chat, read it directly; if it came from the dashboard, call \`resume_read_upload\`). Based on the candidate's most recent job titles and experience, **suggest 2-3 likely positions** as numbered options, plus a custom option. Format like:
 
@@ -166,8 +171,8 @@ When you parse the resume, produce a JSON object with this exact structure. The 
 - \`education[].description\`: Optional — for additional context like vocational training details
 
 ## Important Notes
-- The company letterhead (logo, phone, website) and footer are added automatically by the PDF generator from company settings. You do NOT need to include these in the JSON.
-- The consultant email is passed separately to the \`resume_generate\` tool (\`consultant_email\`).
+- The company logo and footer are added automatically by the PDF generator. You do NOT need to include the letterhead in the JSON.
+- The letterhead lines from Step 2 are passed separately to the \`resume_generate\` tool: \`consultant_email\`, \`letterhead_phone\` and \`letterhead_website\`.
 - Always call tools — do not try to generate PDF content as text in the chat.
 - If the user asks you to re-process or adjust the resume, modify the JSON and call \`resume_generate\` again with the same \`build_id\` (call \`resume_get_build\` first if you no longer have the JSON).
 - Also pass to \`resume_generate\`: \`intake\` (the Step 4/5 answers plus the candidate's email, phone and City, State taken from the ORIGINAL resume), \`client_email\` (the draft below: \`subject\` = its first line, \`body\` = the rest in plain text, no markdown bold) and \`content_review\` (the Included / Omitted / Enhanced lists below). The dashboard shows and edits these.

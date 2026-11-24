@@ -47,14 +47,9 @@ services:
         sync: false
 
       # --- Resume Builder branding ---
+      # The letterhead's consultant email, phone and website are entered per resume (chat or dashboard).
       - key: COMPANY_NAME
         value: GoldCoast Search Group
-      - key: COMPANY_PHONE
-        sync: false
-      - key: COMPANY_WEBSITE
-        sync: false
-      - key: CONSULTANT_EMAILS # comma-separated letterhead emails
-        sync: false
       - key: RESUME_FILE_PREFIX
         value: GoldCoast
 

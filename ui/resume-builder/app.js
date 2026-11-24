@@ -27,7 +27,7 @@ const S = {
 };
 
 function blankIntake() {
-  return { upload: null, uploading: false, error: null, consultant: "", position: "", comp_recent: "", comp_requested: "", nickname: "", references: "", notes: "" };
+  return { upload: null, uploading: false, error: null, consultant: "", phone: "", website: "", position: "", comp_recent: "", comp_requested: "", nickname: "", references: "", notes: "" };
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,11 @@ async function loadData() {
     return;
   }
   S.data = r;
-  if (!S.intake.consultant) S.intake.consultant = r.branding.consultant_emails[0] ?? "";
+  // Prefill the letterhead with what this recruiter used last (or their own email).
+  const lh = r.letterhead ?? { emails: [], phones: [], websites: [], last: null };
+  if (!S.intake.consultant) S.intake.consultant = lh.last?.email ?? lh.emails[0] ?? "";
+  if (!S.intake.phone) S.intake.phone = lh.last?.phone ?? "";
+  if (!S.intake.website) S.intake.website = lh.last?.website ?? "";
   renderHeader();
 }
 
@@ -106,6 +110,7 @@ async function openBuild(id, { quiet = false } = {}) {
 function setBuild(b) {
   S.build = b;
   S.draft = clone(b.resume);
+  S.lh = { ...b.summary.letterhead };
   S.dirty = false;
   S.email = emailFrom(b);
   S.emailResult = null;
@@ -192,7 +197,8 @@ function render() {
 function newView() {
   if (S.pending) return h("div", { class: "new-grid" }, pendingCard(), sideCards());
   const I = S.intake;
-  const emails = S.data?.branding.consultant_emails ?? [];
+  const lhs = S.data?.letterhead ?? { emails: [], phones: [], websites: [] };
+  const emails = lhs.emails;
   const set = (k) => (e) => {
     I[k] = e.target.value;
     refreshSteps();
@@ -236,31 +242,51 @@ function newView() {
         I.uploading ? h("b", {}, h("span", { class: "spinner" }), " Reading the resume…") : [h("b", {}, "Drop the candidate's resume here"), h("span", { class: "small muted" }, `or click to choose · PDF, Word (.docx) or text · up to ${S.data?.max_upload_mb ?? 10} MB`)],
       );
 
-  const consultant = emails.length
-    ? h(
-        "div",
-        { class: "pills" },
-        emails.map((e, i) =>
-          h(
-            "label",
-            { class: `pill${I.consultant === e ? " on" : ""}` },
-            h("input", {
-              type: "radio",
-              name: "consultant",
-              value: e,
-              checked: I.consultant === e,
-              onchange: () => {
-                I.consultant = e;
-                for (const p of document.querySelectorAll(".pill")) p.classList.toggle("on", p.querySelector("input").value === e);
-                refreshSteps();
+  const emailInput = h("input", {
+    class: "in",
+    type: "email",
+    id: "lh-email",
+    placeholder: "consultant@goldcoastsearch.com",
+    value: I.consultant,
+    oninput: (e) => {
+      I.consultant = e.target.value.trim();
+      for (const p of document.querySelectorAll(".pill")) p.classList.toggle("on", p.dataset.email === I.consultant);
+      refreshSteps();
+    },
+  });
+  const letterhead = [
+    emails.length
+      ? h(
+          "div",
+          { class: "pills" },
+          emails.map((e, i) =>
+            h(
+              "button",
+              {
+                type: "button",
+                class: `pill${I.consultant === e ? " on" : ""}`,
+                "data-email": e,
+                onclick: () => {
+                  I.consultant = e;
+                  emailInput.value = e;
+                  for (const p of document.querySelectorAll(".pill")) p.classList.toggle("on", p.dataset.email === e);
+                  refreshSteps();
+                },
               },
-            }),
-            h("span", { class: "num" }, `${i + 1}.`),
-            e,
+              h("span", { class: "num" }, `${i + 1}.`),
+              e,
+            ),
           ),
-        ),
-      )
-    : h("input", { class: "in", type: "email", placeholder: "consultant@goldcoastsearch.com", value: I.consultant, oninput: set("consultant") });
+        )
+      : null,
+    h("label", { class: "field" }, h("span", {}, "Consultant email"), emailInput),
+    h(
+      "div",
+      { class: "row2" },
+      h("label", { class: "field" }, h("span", {}, "Phone"), h("input", { class: "in", type: "tel", list: "lh-phones", placeholder: "(555) 555-5555", value: I.phone, oninput: set("phone") }), h("datalist", { id: "lh-phones" }, lhs.phones.map((v) => h("option", { value: v })))),
+      h("label", { class: "field" }, h("span", {}, "Website"), h("input", { class: "in", list: "lh-sites", placeholder: "www.goldcoastsearch.com", value: I.website, oninput: set("website") }), h("datalist", { id: "lh-sites" }, lhs.websites.map((v) => h("option", { value: v })))),
+    ),
+  ];
 
   const step = (n, key, title, hint, body) => h("div", { class: "step", "data-step": key }, h("div", { class: "n" }, n), h("div", { class: "body" }, h("h3", {}, title, hint ? h("small", {}, hint) : null), body));
 
@@ -269,7 +295,7 @@ function newView() {
     { class: "card intake" },
     h("div", { class: "intake-head" }, h("h2", {}, "New presentation resume"), h("p", {}, "Fill this in and Claude turns the resume into a branded GoldCoast presentation resume, a content review and a draft client email.")),
     step(1, "upload", "Candidate's resume", null, [drop, fileInput, I.error ? h("div", { class: "notice bad" }, I.error) : null]),
-    step(2, "consultant", "Letterhead email", "shown top-right on every page", consultant),
+    step(2, "consultant", "Letterhead", "shown top-right on every page", letterhead),
     step(3, "position", "Position applied", "optional", h("input", { class: "in", placeholder: "Leave blank and Claude picks the best fit from the resume", value: I.position, oninput: set("position") })),
     step(
       4,
@@ -302,12 +328,18 @@ function newView() {
       "div",
       { class: "intake-foot" },
       h("div", { class: "hint", id: "build-hint" }),
-      h("button", { class: "btn ghost", type: "button", onclick: () => ((S.intake = { ...blankIntake(), consultant: S.intake.consultant }), render()) }, "Clear"),
+      h("button", { class: "btn ghost", type: "button", onclick: () => ((S.intake = keepLetterhead()), render()) }, "Clear"),
       h("button", { class: "btn gold lg", type: "button", id: "build-btn", onclick: buildWithClaude }, "Build with Claude →"),
     ),
   );
   queueMicrotask(refreshSteps);
   return h("div", { class: "new-grid" }, card, sideCards());
+}
+
+/** A blank intake that keeps the letterhead (it rarely changes between resumes). */
+function keepLetterhead() {
+  const { consultant, phone, website } = S.intake;
+  return { ...blankIntake(), consultant, phone, website };
 }
 
 function refreshSteps() {
@@ -318,7 +350,7 @@ function refreshSteps() {
   const hint = $("#build-hint");
   if (!btn) return;
   btn.disabled = !I.upload || !I.consultant || I.uploading;
-  hint.textContent = !I.upload ? "Add the resume to start." : !I.consultant ? "Choose the letterhead email." : "Claude reads the resume in your chat and builds it — about a minute.";
+  hint.textContent = !I.upload ? "Add the resume to start." : !I.consultant ? "Add the letterhead's consultant email." : "Claude reads the resume in your chat and builds it — about a minute.";
 }
 
 async function upload(file) {
@@ -355,7 +387,9 @@ function intakeMessage() {
   const refs = I.references.split(",").map((s) => s.trim()).filter(Boolean);
   return [
     `[Resume Builder] Build a presentation resume from the uploaded resume “${u.file_name}” (upload_id ${u.upload_id}).`,
-    `Consultant email (letterhead): ${I.consultant}`,
+    `Letterhead — consultant email: ${I.consultant}`,
+    `Letterhead — phone: ${I.phone.trim() || "(none)"}`,
+    `Letterhead — website: ${I.website.trim() || "(none)"}`,
     `Position applied: ${I.position.trim() || "(blank — use the best fit from the candidate's most recent/senior titles)"}`,
     `Compensation (recent): ${I.comp_recent.trim() || "(not provided)"}`,
     `Compensation (requested): ${I.comp_requested.trim() || "(not provided)"}`,
@@ -363,7 +397,7 @@ function intakeMessage() {
     `Internal references: ${refs.length ? refs.join(", ") : "none"}`,
     `Notes: ${I.notes.trim() || "(blank — auto-generate from the resume)"}`,
     "",
-    "Every intake answer is above, so skip the questions: call resume_get_branding, read the upload with resume_read_upload, then call resume_generate with the upload_id, intake, client_email and content_review.",
+    "Every intake answer is above, so skip the questions: call resume_get_branding, read the upload with resume_read_upload, then call resume_generate with the upload_id, consultant_email, letterhead_phone, letterhead_website, intake, client_email and content_review.",
   ].join("\n");
 }
 
@@ -394,7 +428,7 @@ async function pollForBuild() {
     const b = r.builds.find((x) => x.upload_id === p.upload_id && Date.parse(x.created_at) >= p.sentAt - 60_000);
     if (b) {
       S.pending = null;
-      S.intake = { ...blankIntake(), consultant: S.intake.consultant };
+      S.intake = keepLetterhead();
       toast("Presentation resume ready");
       openBuild(b.id);
       return;
@@ -567,14 +601,22 @@ function renderSavebar() {
       "div",
       { class: "savebar" },
       h("span", {}, "Unsaved edits"),
-      h("button", { class: "btn sm", type: "button", onclick: () => ((S.draft = clone(S.build.resume)), (S.dirty = false), render(), renderSavebar()) }, "Discard"),
+      h("button", { class: "btn sm", type: "button", onclick: () => ((S.draft = clone(S.build.resume)), (S.lh = { ...S.build.summary.letterhead }), (S.dirty = false), render(), renderSavebar()) }, "Discard"),
       h("button", { class: "btn sm gold", type: "button", onclick: () => save() }, "Save changes"),
     ),
   );
 }
 
 async function save(extra = {}) {
-  const r = await call("resume_dashboard_save", { id: S.build.id, version: S.build.version, resume_data: S.draft, ...extra });
+  const r = await call("resume_dashboard_save", {
+    id: S.build.id,
+    version: S.build.version,
+    resume_data: S.draft,
+    consultant_email: S.lh.email,
+    letterhead_phone: S.lh.phone,
+    letterhead_website: S.lh.website,
+    ...extra,
+  });
   if (r.status !== "success") {
     toast(r.message, true);
     return false;
@@ -778,7 +820,7 @@ function paper() {
     "div",
     { class: "paper" },
     h("img", { class: "lh-logo", src: LOGO, alt: "" }),
-    h("div", { class: "lh-contact" }, h("div", {}, br.company_phone ?? ""), h("div", {}, S.build.consultant_email), h("div", {}, br.company_website ?? "")),
+    h("div", { class: "lh-contact" }, h("div", {}, S.lh.phone), h("div", {}, S.lh.email), h("div", {}, S.lh.website)),
     h("div", { class: "lh-rule" }),
     h(
       "div",
@@ -909,7 +951,7 @@ function reviewTab() {
 
 function layoutTab() {
   const r = S.draft;
-  const emails = S.data?.branding.consultant_emails ?? [];
+  const lhs = S.data?.letterhead ?? { emails: [], phones: [], websites: [] };
   const change = (fn) => (e) => {
     fn(e.target.type === "checkbox" ? e.target.checked : e.target.value);
     markDirty();
@@ -932,24 +974,20 @@ function layoutTab() {
   };
   const workIdx = r.section_order.indexOf("work");
   const misordered = workIdx >= 0 && ["skills", "certifications"].some((s) => r.section_order.includes(s) && r.section_order.indexOf(s) > workIdx);
-  const letterhead = emails.includes(S.build.consultant_email) ? emails : [S.build.consultant_email, ...emails];
-
-  return [
+  const lhField = (label, key, list, attrs = {}) =>
     h(
       "label",
       { class: "field" },
-      h("span", {}, "Letterhead email"),
-      h(
-        "select",
-        {
-          class: "in",
-          onchange: async (e) => {
-            if (!(await save({ consultant_email: e.target.value }))) e.target.value = S.build.consultant_email;
-          },
-        },
-        letterhead.map((e) => h("option", { value: e, selected: e === S.build.consultant_email ? "" : undefined }, e)),
-      ),
-    ),
+      h("span", {}, label),
+      h("input", { class: "in", list: `lt-${key}`, value: S.lh[key], oninput: change((v) => (S.lh[key] = v.trim())), ...attrs }),
+      h("datalist", { id: `lt-${key}` }, list.map((v) => h("option", { value: v }))),
+    );
+
+  return [
+    h("h5", {}, "Letterhead"),
+    lhField("Consultant email", "email", lhs.emails, { type: "email" }),
+    h("div", { class: "row2" }, lhField("Phone", "phone", lhs.phones, { type: "tel" }), lhField("Website", "website", lhs.websites)),
+    h("h5", {}, "Details"),
     h("div", { class: "row2" }, h("label", { class: "field" }, h("span", {}, "Nickname"), h("input", { class: "in", value: r.nickname ?? "", oninput: change((v) => (r.nickname = v.trim() || null)) })), h("label", { class: "field" }, h("span", {}, "Position applied"), h("input", { class: "in", value: r.position_applied ?? "", oninput: change((v) => (r.position_applied = v.trim() || null)) }))),
     h(
       "div",

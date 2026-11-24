@@ -11,11 +11,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import type { PluginContext } from "../../core/plugin.js";
 import { getGmail, GmailError, GmailNotConnected } from "../../google/gmail.js";
-import { consultantEmailsFor, loadBranding } from "./branding.js";
+import { letterheadSuggestions, loadBranding } from "./branding.js";
 import { ExtractError, extractResume, guessName, MAX_RESUME_BYTES } from "./extract.js";
 import { downloadUrl, fileName, MIME, renderBuild, type Format } from "./files.js";
 import { clientEmailInput, intakeInput, normalizeResume, resumeDataInput } from "./schema.js";
-import { BUILD_ID_RE, type Build, type BuildStore } from "./store.js";
+import { BUILD_ID_RE, letterheadOf, type Build, type BuildStore } from "./store.js";
 import { holdUpload, UPLOAD_TTL_MS } from "./uploads.js";
 
 export const DASHBOARD_URI = "ui://gc-resume-builder/v1.html";
@@ -51,6 +51,7 @@ export function buildSummary(b: Build) {
     candidate: b.resume.candidate_name,
     position: b.resume.position_applied,
     consultant_email: b.consultant_email,
+    letterhead: letterheadOf(b),
     created_at: b.created_at,
     updated_at: b.updated_at,
     version: b.version,
@@ -100,7 +101,8 @@ export function registerResumeDashboard(server: McpServer, ctx: PluginContext, s
       const b = loadBranding(ctx.env.raw);
       return ok({
         user: { email: ctx.user.email, name: ctx.user.name ?? null },
-        branding: { company_name: b.company_name, company_phone: b.company_phone, company_website: b.company_website, consultant_emails: consultantEmailsFor(b, ctx.user.email) },
+        branding: { company_name: b.company_name },
+        letterhead: letterheadSuggestions(store.recentLetterheads(owner), ctx.user.email),
         gmail: gmail.status(ctx.user),
         persistent: store.persistent,
         max_upload_mb: MAX_RESUME_BYTES / 1024 / 1024,
@@ -170,13 +172,15 @@ export function registerResumeDashboard(server: McpServer, ctx: PluginContext, s
         version: z.number().int().optional().describe("The version the edits were made on"),
         resume_data: resumeDataInput.optional(),
         consultant_email: z.string().trim().min(3).max(200).optional(),
+        letterhead_phone: z.string().trim().max(60).optional(),
+        letterhead_website: z.string().trim().max(200).optional(),
         client_email: clientEmailInput.optional(),
         intake: intakeInput.optional(),
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
       _meta: appOnly,
     },
-    async ({ id, version, resume_data, consultant_email, client_email, intake }) => {
+    async ({ id, version, resume_data, consultant_email, letterhead_phone, letterhead_website, client_email, intake }) => {
       const prev = store.get(id, owner);
       if (!prev) return failure("not_found", "That resume wasn't found. It may have been deleted.");
       if (version !== undefined && version !== prev.version) {
@@ -185,6 +189,8 @@ export function registerResumeDashboard(server: McpServer, ctx: PluginContext, s
       const b = store.update(id, owner, {
         ...(resume_data ? { resume: normalizeResume(resume_data) } : {}),
         ...(consultant_email ? { consultant_email } : {}),
+        ...(letterhead_phone !== undefined ? { letterhead_phone } : {}),
+        ...(letterhead_website !== undefined ? { letterhead_website } : {}),
         ...(client_email ? { client_email } : {}),
         ...(intake ? { intake: { ...prev.intake, ...intake } } : {}),
       });

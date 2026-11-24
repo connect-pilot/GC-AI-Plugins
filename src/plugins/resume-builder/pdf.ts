@@ -9,7 +9,7 @@
  */
 import PDFDocument from "pdfkit";
 import { certText, displayName, type ResumeData, type SectionId } from "./schema.js";
-import type { Branding } from "./branding.js";
+import type { Branding, Letterhead } from "./branding.js";
 
 // ── Page geometry (points; origin top-left, unlike ReportLab) ───────────
 const INCH = 72;
@@ -261,7 +261,7 @@ class Layout {
 }
 
 // ── Letterhead, border and footer on every page ─────────────────────────
-function pageDecorator(doc: Doc, consultantEmail: string, branding: Branding, logo: Buffer | null) {
+function pageDecorator(doc: Doc, letterhead: Letterhead, branding: Branding, logo: Buffer | null) {
   return () => {
     doc.save();
     doc.lineWidth(1).strokeColor("#000000").rect(BORDER_INSET, BORDER_INSET, PAGE_W - 2 * BORDER_INSET, PAGE_H - 2 * BORDER_INSET).stroke();
@@ -276,7 +276,7 @@ function pageDecorator(doc: Doc, consultantEmail: string, branding: Branding, lo
     }
     doc.fillColor("#000000").font(REGULAR).fontSize(11);
     const right = PAGE_W - MARGIN_LR;
-    [branding.company_phone, consultantEmail, branding.company_website].forEach((line, i) => {
+    [letterhead.phone, letterhead.email, letterhead.website].forEach((line, i) => {
       const text = pdfSafe(line ?? "");
       if (!text) return;
       doc.text(text, right - doc.widthOfString(text), 0.75 * INCH + i * 16, { lineBreak: false, baseline: "alphabetic" });
@@ -398,7 +398,7 @@ const builders: Record<SectionId, (d: ResumeData) => Flowable[]> = {
 };
 
 /** Renders the presentation resume PDF. */
-export function renderResumePdf(data: ResumeData, consultantEmail: string, branding: Branding, logo: Buffer | null): Promise<Buffer> {
+export function renderResumePdf(data: ResumeData, letterhead: Letterhead, branding: Branding, logo: Buffer | null): Promise<Buffer> {
   const doc = new PDFDocument({
     size: "LETTER",
     margin: 0,
@@ -411,7 +411,7 @@ export function renderResumePdf(data: ResumeData, consultantEmail: string, brand
     doc.on("error", reject);
   });
 
-  const layout = new Layout(doc, pageDecorator(doc, consultantEmail, branding, logo));
+  const layout = new Layout(doc, pageDecorator(doc, letterhead, branding, logo));
   layout.add(para(displayName(data), S.name));
   if (data.position_applied) layout.add(para(data.position_applied, S.position_applied));
   else layout.add({ kind: "spacer", height: 10 });

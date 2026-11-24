@@ -27,6 +27,9 @@ export interface Build {
   version: number;
   resume: ResumeData;
   consultant_email: string;
+  /** Letterhead phone and website (top-right, around the consultant email). Older builds: "". */
+  letterhead_phone?: string;
+  letterhead_website?: string;
   intake: Intake;
   client_email: ClientEmail | null;
   content_review: ContentReview | null;
@@ -101,7 +104,7 @@ export class BuildStore {
     return this.builds.get(id) ?? null;
   }
 
-  update(id: string, owner: string, patch: Partial<Pick<Build, "resume" | "consultant_email" | "intake" | "client_email" | "content_review" | "source">>): Build | null {
+  update(id: string, owner: string, patch: Partial<Pick<Build, "resume" | "consultant_email" | "letterhead_phone" | "letterhead_website" | "intake" | "client_email" | "content_review" | "source">>): Build | null {
     const b = this.get(id, owner);
     if (!b) return null;
     const next: Build = { ...b, ...patch, version: b.version + 1, updated_at: new Date().toISOString() };
@@ -122,6 +125,11 @@ export class BuildStore {
     if (this.dir) rmSync(join(this.dir, `${id}.json`), { force: true });
   }
 
+  /** Letterheads on this owner's recent builds, newest first (for suggestions). */
+  recentLetterheads(owner: string) {
+    return this.list(owner, 30).map(letterheadOf);
+  }
+
   list(owner: string, limit = 200): Build[] {
     this.purge();
     return [...this.builds.values()]
@@ -130,6 +138,8 @@ export class BuildStore {
       .slice(0, limit);
   }
 }
+
+export const letterheadOf = (b: Build) => ({ email: b.consultant_email, phone: b.letterhead_phone ?? "", website: b.letterhead_website ?? "" });
 
 let shared: BuildStore | null = null;
 export function getStore(env: NodeJS.ProcessEnv): BuildStore {

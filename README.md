@@ -12,7 +12,8 @@ AI plugins for GoldCoast Search Group, served over one vendor-neutral **MCP serv
 The server never calls a model. The user's own Claude reads the resume and writes the structured JSON; the server renders the branded PDF/DOCX, keeps the build and saves Gmail drafts.
 
 ## Resume Builder
-- **In chat:** attach a resume and say "build a presentation resume". Claude follows the original five-step intake (consultant email → position → compensation → nickname/references/notes), then returns PDF/DOCX download links, the content review and the draft client email, and offers a Gmail draft.
+- **Letterhead:** the consultant email, phone and website (top-right of every page) are entered per resume — Claude asks in chat, the dashboard has fields — and the ones a recruiter used before are offered back, so they're typed once.
+- **In chat:** attach a resume and say "build a presentation resume". Claude follows the original five-step intake (letterhead → position → compensation → nickname/references/notes), then returns PDF/DOCX download links, the content review and the draft client email, and offers a Gmail draft.
 - **Dashboard:** "open the resume builder". Drop the resume, fill the intake, press **Build with Claude** (it posts the request into the chat), and the finished build opens with an editable page preview, client email → **Create Gmail draft**, content review, layout controls and **Ask Claude** for revisions.
 - Files: `src/plugins/resume-builder/` — `prompts.ts` (playbook ported from `prompts.py`), `pdf.ts` / `docx.ts` (ports of the ReportLab and python-docx generators), `schema.ts`, `store.ts`, `files.ts` (signed download links), `dashboard.ts`; UI in `ui/resume-builder/`.
 

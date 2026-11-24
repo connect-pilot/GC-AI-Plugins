@@ -1,39 +1,55 @@
 /**
- * Company branding for the letterhead, footer and client email — the original agent's
- * get_company_branding(), configured with env vars instead of the workspace's settings table.
+ * Company branding (footer, client email subject, file names, logo) — configured with env vars.
+ *
+ * The letterhead's contact lines (consultant email, phone, website) are NOT configured here: they
+ * are asked for each resume (in chat or in the dashboard) and saved with the build. Suggestions
+ * come from the recruiter's own recent builds, so they rarely need retyping.
  */
 import { readFileSync } from "node:fs";
 
 export interface Branding {
   company_name: string;
-  company_phone: string;
-  company_website: string;
-  consultant_emails: string[];
   /** File names start with this, e.g. "GoldCoast - Ezrilov, Aaron.pdf". */
   file_prefix: string;
 }
 
-const list = (v?: string) =>
-  (v ?? "")
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 export function loadBranding(env: NodeJS.ProcessEnv): Branding {
   return {
     company_name: env.COMPANY_NAME?.trim() || "GoldCoast Search Group",
-    company_phone: env.COMPANY_PHONE?.trim() ?? "",
-    company_website: env.COMPANY_WEBSITE?.trim() ?? "",
-    consultant_emails: list(env.CONSULTANT_EMAILS),
     file_prefix: env.RESUME_FILE_PREFIX?.trim() || "GoldCoast",
   };
 }
 
-/** Consultant emails with the signed-in recruiter's own first (when it's on the list). */
-export function consultantEmailsFor(b: Branding, userEmail: string | undefined): string[] {
-  const me = userEmail?.toLowerCase();
-  const own = b.consultant_emails.filter((e) => e.toLowerCase() === me);
-  return [...own, ...b.consultant_emails.filter((e) => e.toLowerCase() !== me)];
+/** The letterhead's three contact lines (top-right of every page). */
+export interface Letterhead {
+  email: string;
+  phone: string;
+  website: string;
+}
+
+export interface LetterheadSuggestions {
+  /** Consultant emails to offer: the signed-in recruiter's first, then ones used on recent builds. */
+  emails: string[];
+  phones: string[];
+  websites: string[];
+  /** The most recent build's letterhead, to prefill. */
+  last: Letterhead | null;
+}
+
+const distinct = (xs: string[]) => {
+  const seen = new Set<string>();
+  return xs.filter((x) => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+};
+
+/** Suggestions from this recruiter's builds (newest first) and their signed-in email. */
+export function letterheadSuggestions(recent: Letterhead[], userEmail: string | undefined): LetterheadSuggestions {
+  const own = userEmail && /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(userEmail) && !userEmail.endsWith("@localhost") ? [userEmail] : [];
+  return {
+    emails: distinct([...own, ...recent.map((l) => l.email)]).slice(0, 6),
+    phones: distinct(recent.map((l) => l.phone)).slice(0, 4),
+    websites: distinct(recent.map((l) => l.website)).slice(0, 4),
+    last: recent[0] ?? null,
+  };
 }
 
 let logo: { bytes: Buffer; path: string } | null = null;
